@@ -10,7 +10,8 @@
 cmake_minimum_required(VERSION 3.7)
 
 project(NvCodec)
-
+set(SKIP_FFMPEG_DEPENDENCY TRUE)
+set(SKIP_GL_DEPENDENCY TRUE)
 # Set C++11 for all projects and disable non-standard extensions
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
