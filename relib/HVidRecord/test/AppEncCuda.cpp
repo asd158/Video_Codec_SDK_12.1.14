@@ -5,7 +5,7 @@
 #include <vector>
 
 int main() {
-    char szInFilePath[256] = "..\\..\\..\\test\\aa.yuv";
+    char szInFilePath[256] = ".\\..\\..\\..\\test\\aa.yuv";
 
     // Open input file
     std::ifstream fpIn(szInFilePath, std::ifstream::in | std::ifstream::binary);
