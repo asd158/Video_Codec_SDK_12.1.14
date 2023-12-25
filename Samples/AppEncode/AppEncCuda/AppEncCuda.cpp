@@ -4,6 +4,9 @@
 #include <cuda.h>
 #include "NvEncoder/NvEncoderCuda.h"
 
+simplelogger::Logger *logger = simplelogger::LoggerFactory::CreateConsoleLogger();
+
+
 template<class EncoderClass>
 void
 InitializeEncoder(EncoderClass &pEnc, GUID encode, GUID preset, NV_ENC_TUNING_INFO tuning_info, int targetFrameRate) {
@@ -49,8 +52,7 @@ InitializeEncoder(EncoderClass &pEnc, GUID encode, GUID preset, NV_ENC_TUNING_IN
 //        NV_ENC_HEVC_PROFILE_MAIN_GUID,
 //        NV_ENC_HEVC_PROFILE_MAIN10_GUID,
 //        NV_ENC_HEVC_PROFILE_FREXT_GUID,
-        encodeConfig.profileGUID = NV_ENC_HEVC_PROFILE_FREXT_GUID;
-//        encodeConfig.encodeCodecConfig.hevcConfig.idrPeriod = config.gopLength;
+        encodeConfig.profileGUID = NV_ENC_HEVC_PROFILE_MAIN_GUID;
 //        YUV444 Input
 //        encodeConfig.encodeCodecConfig.hevcConfig.chromaFormatIDC = 3;
 
