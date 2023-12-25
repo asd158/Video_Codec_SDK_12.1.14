@@ -17,6 +17,8 @@ extern "C" {
 #endif
 HAI_CALL void *
 hvid_record_open(int work_gpu, int v_width, int v_height, int framerate, int level, const char *export_dir);
+HAI_CALL int hvid_record_get_vid_frame_buffsize(void *inst_id);
+HAI_CALL int hvid_record_get_vid_frame_count(void *inst_id);
 HAI_CALL int hvid_record_write_vid(void *inst_id, const char *vid_buff, int vid_buff_size, int is_final);
 HAI_CALL int hvid_record_write_aud(void *inst_id);
 HAI_CALL int hvid_record_close(void *inst_id);

@@ -34,32 +34,33 @@ struct LowVidPreset {
 };
 
 struct VidInfo {
-    int nWidth{-1};
-    int nHeight{-1};
-    CUcontext cuc{nullptr};
-    NV_ENC_BUFFER_FORMAT EFORMAT{NV_ENC_BUFFER_FORMAT_IYUV};
-    NvEncoderCuda *pEnc{nullptr};
-    int nFrame{0};
-    uint8_t *pHostFrame{nullptr};
-    std::vector<std::vector<uint8_t>> vPacket;
-    std::string uuid;
-    HiFile::FileWriter VidWriter;
-    HiFile::FileWriter AudWriter;
+    int baseWidth{-1};
+    int baseHeight{-1};
+    int baseSampleRate{-1};
+    CUcontext baseCudaCtx{nullptr};
+    NV_ENC_BUFFER_FORMAT baseBuffFormat{NV_ENC_BUFFER_FORMAT_IYUV};
+    NvEncoderCuda *basePtrCudaEnc{nullptr};
+    int baseFrameCnt{0};
+    uint8_t *basePtrHostFrameCache{nullptr};
+    std::vector<std::vector<uint8_t>> baseVPacketCache;
+    std::string baseUuid;
+    HiFile::FileWriter baseVidWriter;
+    HiFile::FileWriter baseAudWriter;
 
     virtual ~VidInfo() {
-        if (pEnc) {
-            pEnc->DestroyEncoder();
-            pEnc = nullptr;
+        if (basePtrCudaEnc) {
+            basePtrCudaEnc->DestroyEncoder();
+            basePtrCudaEnc = nullptr;
         }
-        if (cuc) {
-            cuCtxDestroy_v2(cuc);
-            cuc = nullptr;
+        if (baseCudaCtx) {
+            cuCtxDestroy_v2(baseCudaCtx);
+            baseCudaCtx = nullptr;
         }
-        if (pHostFrame) {
-            delete pHostFrame;
-            pHostFrame = nullptr;
+        if (basePtrHostFrameCache) {
+            delete basePtrHostFrameCache;
+            basePtrHostFrameCache = nullptr;
         }
-        VidWriter.Close();
+        baseVidWriter.Close();
     }
 };
 
@@ -70,35 +71,37 @@ struct LevelVidInfo : public VidInfo {
                     typename std::conditional
                             <level == 1, MidVidPreset, typename std::conditional
                                     <level == 2, HighVidPreset, void>::type>::type>::type;
-    PresetType preset{};
+    PresetType Preset{};
 
     static VidInfo *CreateVid(CUcontext cuc, int v_width, int v_height, int framerate, const std::string &export_dir) {
         auto vidInfo = new LevelVidInfo<level>();
-        vidInfo->EFORMAT = NV_ENC_BUFFER_FORMAT_IYUV;
-        vidInfo->nWidth = v_width;
-        vidInfo->nHeight = v_height;
-        vidInfo->cuc = cuc;
-        vidInfo->pEnc = new NvEncoderCuda(vidInfo->cuc, vidInfo->nWidth, vidInfo->nHeight, vidInfo->EFORMAT);
-        vidInfo->nFrame = 0;
-        vidInfo->pHostFrame = new uint8_t[vidInfo->pEnc->GetFrameSize()];
+        vidInfo->baseBuffFormat = NV_ENC_BUFFER_FORMAT_IYUV;
+        vidInfo->baseWidth = v_width;
+        vidInfo->baseHeight = v_height;
+        vidInfo->baseSampleRate = framerate;
+        vidInfo->baseCudaCtx = cuc;
+        vidInfo->basePtrCudaEnc = new NvEncoderCuda(vidInfo->baseCudaCtx, vidInfo->baseWidth, vidInfo->baseHeight,
+                                                    vidInfo->baseBuffFormat);
+        vidInfo->baseFrameCnt = 0;
+        vidInfo->basePtrHostFrameCache = new uint8_t[vidInfo->basePtrCudaEnc->GetFrameSize()];
         HiFile::mk_dir(export_dir);
-        vidInfo->uuid = HiUtils::uuid();
-        vidInfo->VidWriter.Open(HiFile::path_concat(export_dir, vidInfo->uuid + ".v"));
-        InitializeEncoder(vidInfo->pEnc, vidInfo->preset.ENC_CODEC, vidInfo->preset.VPRESET,
-                          vidInfo->preset.VTUNINGINFO,
-                          framerate);
+        vidInfo->baseUuid = HiUtils::uuid();
+        vidInfo->baseVidWriter.Open(HiFile::path_concat(export_dir, vidInfo->baseUuid + ".v"));
+        InitializeEncoder(vidInfo);
         return vidInfo;
     };
 };
 
-template<class EncoderClass>
-void
-InitializeEncoder(EncoderClass &pEnc, GUID encode, GUID preset, NV_ENC_TUNING_INFO tuning_info, int targetFrameRate) {
+template<class Vid>
+void InitializeEncoder(Vid &&vid) {
     NV_ENC_INITIALIZE_PARAMS initializeParams = {NV_ENC_INITIALIZE_PARAMS_VER};
     NV_ENC_CONFIG encodeConfig = {NV_ENC_CONFIG_VER};
     initializeParams.encodeConfig = &encodeConfig;
-    pEnc->CreateDefaultEncoderParams(&initializeParams, encode, preset, tuning_info);
-    initializeParams.frameRateNum = targetFrameRate;
+    vid->basePtrCudaEnc->CreateDefaultEncoderParams(&initializeParams,
+                                                    vid->Preset.ENC_CODEC,
+                                                    vid->Preset.VPRESET,
+                                                    vid->Preset.VTUNINGINFO);
+    initializeParams.frameRateNum = vid->baseSampleRate;
     initializeParams.frameRateDen = 1;
 //    encodeConfig.rcParams.averageBitRate
 //    encodeConfig.rcParams.maxBitRate
@@ -119,33 +122,9 @@ InitializeEncoder(EncoderClass &pEnc, GUID encode, GUID preset, NV_ENC_TUNING_IN
 //    encodeConfig.rcParams.enableLookahead
 //    encodeConfig.rcParams.lookaheadDepth
     encodeConfig.rcParams.multiPass = NV_ENC_MULTI_PASS_DISABLED;
-//    NV_ENC_PARAMS_RC_CONSTQP,
-//    NV_ENC_PARAMS_RC_VBR,
-//    NV_ENC_PARAMS_RC_CBR,
-    encodeConfig.rcParams.rateControlMode = NV_ENC_PARAMS_RC_CONSTQP;
-    if (NV_ENC_CODEC_H264_GUID == encode) {
-//        NV_ENC_H264_PROFILE_BASELINE_GUID,
-//        NV_ENC_H264_PROFILE_MAIN_GUID,
-//        NV_ENC_H264_PROFILE_HIGH_GUID,
-//        NV_ENC_H264_PROFILE_HIGH_444_GUID,
-        encodeConfig.profileGUID = NV_ENC_H264_PROFILE_HIGH_GUID;
-//        encodeConfig.encodeCodecConfig.h264Config.idrPeriod = config.gopLength;
-//        YUV444 Input
-//        encodeConfig.encodeCodecConfig.h264Config.chromaFormatIDC = 3;
-    } else if (NV_ENC_CODEC_HEVC_GUID == encode) {
-//        NV_ENC_HEVC_PROFILE_MAIN_GUID,
-//        NV_ENC_HEVC_PROFILE_MAIN10_GUID,
-//        NV_ENC_HEVC_PROFILE_FREXT_GUID,
-        encodeConfig.profileGUID = NV_ENC_HEVC_PROFILE_MAIN_GUID;
-//        YUV444 Input
-//        encodeConfig.encodeCodecConfig.hevcConfig.chromaFormatIDC = 3;
-
-    } else {
-//        NV_ENC_AV1_PROFILE_MAIN_GUID,
-        encodeConfig.profileGUID = NV_ENC_AV1_PROFILE_MAIN_GUID;
-//        encodeConfig.encodeCodecConfig.av1Config.idrPeriod = config.gopLength;
-    }
-    pEnc->CreateEncoder(&initializeParams);
+    encodeConfig.rcParams.rateControlMode = vid->Preset.rateControlMode;
+    encodeConfig.profileGUID = vid->Preset.profileGUID;
+    vid->basePtrCudaEnc->CreateEncoder(&initializeParams);
 }
 
 void *hvid_record_open(int work_gpu, int v_width, int v_height, int framerate, int level, const char *export_dir) {
@@ -174,36 +153,58 @@ void *hvid_record_open(int work_gpu, int v_width, int v_height, int framerate, i
     }
 }
 
+int hvid_record_get_vid_frame_buffsize(void *inst_id) {
+    if (inst_id == nullptr) {
+        return -1;
+    }
+    auto ptrVid = (VidInfo *) inst_id;
+    return ptrVid->basePtrCudaEnc->GetFrameSize();
+}
+
+int hvid_record_get_vid_frame_count(void *inst_id) {
+    if (inst_id == nullptr) {
+        return -1;
+    }
+    auto ptrVid = (VidInfo *) inst_id;
+    return ptrVid->baseFrameCnt;
+}
+
+
 int hvid_record_write_vid(void *inst_id, const char *vid_buff, int vid_buff_size, int is_final) {
     if (inst_id == nullptr) {
         return -1;
     }
     auto ptrVid = (VidInfo *) inst_id;
-    int nFrameSize = ptrVid->pEnc->GetFrameSize();
+    int nFrameSize = ptrVid->basePtrCudaEnc->GetFrameSize();
     if (vid_buff_size != nFrameSize) {
+        if (is_final) {
+            ptrVid->baseVidWriter.Close();
+            return 0;
+        }
         return -2;
     }
     if ((bool) is_final) {
-        const NvEncInputFrame *encoderInputFrame = ptrVid->pEnc->GetNextInputFrame();
-        NvEncoderCuda::CopyToDeviceFrame(ptrVid->cuc, ptrVid->pHostFrame, 0, (CUdeviceptr) encoderInputFrame->inputPtr,
+        const NvEncInputFrame *encoderInputFrame = ptrVid->basePtrCudaEnc->GetNextInputFrame();
+        NvEncoderCuda::CopyToDeviceFrame(ptrVid->baseCudaCtx, ptrVid->basePtrHostFrameCache, 0,
+                                         (CUdeviceptr) encoderInputFrame->inputPtr,
                                          (int) encoderInputFrame->pitch,
-                                         ptrVid->pEnc->GetEncodeWidth(),
-                                         ptrVid->pEnc->GetEncodeHeight(),
+                                         ptrVid->basePtrCudaEnc->GetEncodeWidth(),
+                                         ptrVid->basePtrCudaEnc->GetEncodeHeight(),
                                          CU_MEMORYTYPE_HOST,
                                          encoderInputFrame->bufferFormat,
                                          encoderInputFrame->chromaOffsets,
                                          encoderInputFrame->numChromaPlanes);
-        ptrVid->pEnc->EncodeFrame(ptrVid->vPacket);
+        ptrVid->basePtrCudaEnc->EncodeFrame(ptrVid->baseVPacketCache);
     } else {
-        ptrVid->pEnc->EndEncode(ptrVid->vPacket);
+        ptrVid->basePtrCudaEnc->EndEncode(ptrVid->baseVPacketCache);
     }
-    ptrVid->nFrame += (int) ptrVid->vPacket.size();
-    for (std::vector<uint8_t> &packet: ptrVid->vPacket) {
+    ptrVid->baseFrameCnt += (int) ptrVid->baseVPacketCache.size();
+    for (std::vector<uint8_t> &packet: ptrVid->baseVPacketCache) {
         // For each encoded packet
-        ptrVid->VidWriter.Write(reinterpret_cast<char *>(packet.data()), packet.size());
+        ptrVid->baseVidWriter.Write(reinterpret_cast<char *>(packet.data()), packet.size());
     }
     if ((bool) is_final) {
-        ptrVid->VidWriter.Close();
+        ptrVid->baseVidWriter.Close();
     }
     return 0;
 }
@@ -212,7 +213,7 @@ int hvid_record_write_aud(void *inst_id) {
     return 0;
 }
 
-int hvid_record_close(void *inst_id, const char *export_dir) {
+int hvid_record_close(void *inst_id) {
     if (inst_id == nullptr) {
         return -1;
     }

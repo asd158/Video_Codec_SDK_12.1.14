@@ -35,6 +35,7 @@ target_link_libraries(${PROJECT_NAME} ${CUDA_CUDA_LIBRARY} ${NVCodecSDK_LIBRARIE
 TARGET_COMPILE_DEFINITIONS(${PROJECT_NAME} PRIVATE HAI_EXPORT)
 if (MSVC)
     add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-    set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${NVCODEC_SAMPLES_INSTALL_DIR}/$<CONFIG>/)
 endif ()
-
+######################################################################################
+add_executable(TEST_${PROJECT_NAME} test/AppEncCuda.cpp)
+target_link_libraries(TEST_${PROJECT_NAME} ${PROJECT_NAME})
