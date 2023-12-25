@@ -230,7 +230,7 @@ int hvid_record_write_vid(void *inst_id, const char *vid_buff, int vid_buff_size
     return 0;
 }
 
-int hvid_record_write_aud(void *inst_id) {
+int hvid_record_write_aud(void *inst_id, const char *aud_buff, int aud_buff_size, bool is_final) {
     return 0;
 }
 
