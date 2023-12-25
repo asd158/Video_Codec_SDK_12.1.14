@@ -1,1 +1,6 @@
 cmake-*
+.idea
+/test/*.y4m
+/test/*.yuv
+/test/*.hevc
+/test/*.mp4
