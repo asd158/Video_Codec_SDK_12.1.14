@@ -192,6 +192,11 @@ void HiFile::FileWriter::Close() {
     fclose(_file);
     _file = nullptr;
 }
+
+bool HiFile::FileWriter::IsOpened() {
+    return _file!= nullptr;
+}
+
 bool HiFile::FileReader::Open(const std::string &filePath) {
     if (_file != nullptr) {
         return false;

@@ -12,23 +12,23 @@
 simplelogger::Logger *logger = simplelogger::LoggerFactory::CreateConsoleLogger();
 
 struct HighVidPreset {
-    GUID ENC_CODEC = NV_ENC_CODEC_HEVC_GUID;
-    GUID VPRESET = NV_ENC_PRESET_P7_GUID;
-    NV_ENC_TUNING_INFO VTUNINGINFO = NV_ENC_TUNING_INFO_HIGH_QUALITY;
+    GUID Enc = NV_ENC_CODEC_HEVC_GUID;
+    GUID vPreset = NV_ENC_PRESET_P2_GUID;
+    NV_ENC_TUNING_INFO vTuningInfo = NV_ENC_TUNING_INFO_LOSSLESS;
     NV_ENC_PARAMS_RC_MODE rateControlMode = NV_ENC_PARAMS_RC_CONSTQP;
     GUID profileGUID = NV_ENC_HEVC_PROFILE_MAIN_GUID;
 };
 struct MidVidPreset {
-    GUID ENC_CODEC = NV_ENC_CODEC_HEVC_GUID;
-    GUID VPRESET = NV_ENC_PRESET_P7_GUID;
-    NV_ENC_TUNING_INFO VTUNINGINFO = NV_ENC_TUNING_INFO_HIGH_QUALITY;
+    GUID Enc = NV_ENC_CODEC_H264_GUID;
+    GUID vPreset = NV_ENC_PRESET_P7_GUID;
+    NV_ENC_TUNING_INFO vTuningInfo = NV_ENC_TUNING_INFO_HIGH_QUALITY;
     NV_ENC_PARAMS_RC_MODE rateControlMode = NV_ENC_PARAMS_RC_CONSTQP;
-    GUID profileGUID = NV_ENC_HEVC_PROFILE_MAIN_GUID;
+    GUID profileGUID = NV_ENC_H264_PROFILE_MAIN_GUID;
 };
 struct LowVidPreset {
-    GUID ENC_CODEC = NV_ENC_CODEC_HEVC_GUID;
-    GUID VPRESET = NV_ENC_PRESET_P7_GUID;
-    NV_ENC_TUNING_INFO VTUNINGINFO = NV_ENC_TUNING_INFO_HIGH_QUALITY;
+    GUID Enc = NV_ENC_CODEC_HEVC_GUID;
+    GUID vPreset = NV_ENC_PRESET_P7_GUID;
+    NV_ENC_TUNING_INFO vTuningInfo = NV_ENC_TUNING_INFO_HIGH_QUALITY;
     NV_ENC_PARAMS_RC_MODE rateControlMode = NV_ENC_PARAMS_RC_CONSTQP;
     GUID profileGUID = NV_ENC_HEVC_PROFILE_MAIN_GUID;
 };
@@ -41,7 +41,6 @@ struct VidInfo {
     NV_ENC_BUFFER_FORMAT baseBuffFormat{NV_ENC_BUFFER_FORMAT_IYUV};
     NvEncoderCuda *basePtrCudaEnc{nullptr};
     int baseFrameCnt{0};
-    uint8_t *basePtrHostFrameCache{nullptr};
     std::vector<std::vector<uint8_t>> baseVPacketCache;
     std::string baseUuid;
     HiFile::FileWriter baseVidWriter;
@@ -55,10 +54,6 @@ struct VidInfo {
         if (baseCudaCtx) {
             cuCtxDestroy_v2(baseCudaCtx);
             baseCudaCtx = nullptr;
-        }
-        if (basePtrHostFrameCache) {
-            delete basePtrHostFrameCache;
-            basePtrHostFrameCache = nullptr;
         }
         baseVidWriter.Close();
     }
@@ -74,21 +69,25 @@ struct LevelVidInfo : public VidInfo {
     PresetType Preset{};
 
     static VidInfo *CreateVid(CUcontext cuc, int v_width, int v_height, int framerate, const std::string &export_dir) {
-        auto vidInfo = new LevelVidInfo<level>();
-        vidInfo->baseBuffFormat = NV_ENC_BUFFER_FORMAT_IYUV;
-        vidInfo->baseWidth = v_width;
-        vidInfo->baseHeight = v_height;
-        vidInfo->baseSampleRate = framerate;
-        vidInfo->baseCudaCtx = cuc;
-        vidInfo->basePtrCudaEnc = new NvEncoderCuda(vidInfo->baseCudaCtx, vidInfo->baseWidth, vidInfo->baseHeight,
-                                                    vidInfo->baseBuffFormat);
-        vidInfo->baseFrameCnt = 0;
-        vidInfo->basePtrHostFrameCache = new uint8_t[vidInfo->basePtrCudaEnc->GetFrameSize()];
-        HiFile::mk_dir(export_dir);
-        vidInfo->baseUuid = HiUtils::uuid();
-        vidInfo->baseVidWriter.Open(HiFile::path_concat(export_dir, vidInfo->baseUuid + ".v"));
-        InitializeEncoder(vidInfo);
-        return vidInfo;
+        try {
+            auto vidInfo = new LevelVidInfo<level>();
+            vidInfo->baseBuffFormat = NV_ENC_BUFFER_FORMAT_IYUV;
+            vidInfo->baseWidth = v_width;
+            vidInfo->baseHeight = v_height;
+            vidInfo->baseSampleRate = framerate;
+            vidInfo->baseCudaCtx = cuc;
+            vidInfo->basePtrCudaEnc = new NvEncoderCuda(vidInfo->baseCudaCtx, vidInfo->baseWidth, vidInfo->baseHeight,
+                                                        vidInfo->baseBuffFormat);
+            vidInfo->baseFrameCnt = 0;
+            HiFile::mk_dir(export_dir);
+            vidInfo->baseUuid = HiUtils::uuid();
+            vidInfo->baseVidWriter.Open(HiFile::path_concat(export_dir, vidInfo->baseUuid + ".v"));
+            InitializeEncoder(vidInfo);
+            return vidInfo;
+        }
+        catch (const std::exception &ex) {
+            return nullptr;
+        }
     };
 };
 
@@ -98,9 +97,9 @@ void InitializeEncoder(Vid &&vid) {
     NV_ENC_CONFIG encodeConfig = {NV_ENC_CONFIG_VER};
     initializeParams.encodeConfig = &encodeConfig;
     vid->basePtrCudaEnc->CreateDefaultEncoderParams(&initializeParams,
-                                                    vid->Preset.ENC_CODEC,
-                                                    vid->Preset.VPRESET,
-                                                    vid->Preset.VTUNINGINFO);
+                                                    vid->Preset.Enc,
+                                                    vid->Preset.vPreset,
+                                                    vid->Preset.vTuningInfo);
     initializeParams.frameRateNum = vid->baseSampleRate;
     initializeParams.frameRateDen = 1;
 //    encodeConfig.rcParams.averageBitRate
@@ -138,19 +137,30 @@ void *hvid_record_open(int work_gpu, int v_width, int v_height, int framerate, i
     ck(cuDeviceGet(&cuDevice, work_gpu));
     char szDeviceName[80];
     ck(cuDeviceGetName(szDeviceName, sizeof(szDeviceName), cuDevice));
-    std::cout << "GPU in use: " << szDeviceName << std::endl;
     CUcontext cuContext = nullptr;
     ck(cuCtxCreate(&cuContext, 0, cuDevice));
-    if (level <= 0) {
-        return LevelVidInfo<0>::CreateVid(cuContext, v_width, v_height, framerate, export_dir);
-    } else if (level == 1) {
-        return LevelVidInfo<1>::CreateVid(cuContext, v_width, v_height, framerate, export_dir);
-    } else if (level == 2) {
-        return LevelVidInfo<2>::CreateVid(cuContext, v_width, v_height, framerate, export_dir);
-    } else {
-        cuCtxDestroy_v2(cuContext);
+    if (level == 1) {
+        auto ret = LevelVidInfo<1>::CreateVid(cuContext, v_width, v_height, framerate, export_dir);
+        if (ret == nullptr) {
+            return nullptr;
+        }
+        LOG_INFO(">>> open[{}@{}] -> {}", level, szDeviceName, (intptr_t) ret);
+        return ret;
+    }
+    if (level == 2) {
+        auto ret = LevelVidInfo<2>::CreateVid(cuContext, v_width, v_height, framerate, export_dir);
+        if (ret == nullptr) {
+            return nullptr;
+        }
+        LOG_INFO(">>> open[{}@{}] -> {}", level, szDeviceName, (intptr_t) ret);
+        return ret;
+    }
+    auto ret = LevelVidInfo<0>::CreateVid(cuContext, v_width, v_height, framerate, export_dir);
+    if (ret == nullptr) {
         return nullptr;
     }
+    LOG_INFO(">>> open[{}@{}] -> {}", level, szDeviceName, (intptr_t) ret);
+    return ret;
 }
 
 int hvid_record_get_vid_frame_buffsize(void *inst_id) {
@@ -175,17 +185,14 @@ int hvid_record_write_vid(void *inst_id, const char *vid_buff, int vid_buff_size
         return -1;
     }
     auto ptrVid = (VidInfo *) inst_id;
-    int nFrameSize = ptrVid->basePtrCudaEnc->GetFrameSize();
-    if (vid_buff_size != nFrameSize) {
-        if (is_final) {
-            ptrVid->baseVidWriter.Close();
-            return 0;
-        }
+    if (!ptrVid->baseVidWriter.IsOpened()) {
         return -2;
     }
-    if ((bool) is_final) {
+    int nFrameSize = ptrVid->basePtrCudaEnc->GetFrameSize();
+    if (!(bool) is_final && vid_buff_size == nFrameSize) {
         const NvEncInputFrame *encoderInputFrame = ptrVid->basePtrCudaEnc->GetNextInputFrame();
-        NvEncoderCuda::CopyToDeviceFrame(ptrVid->baseCudaCtx, ptrVid->basePtrHostFrameCache, 0,
+        NvEncoderCuda::CopyToDeviceFrame(ptrVid->baseCudaCtx,
+                                         reinterpret_cast<uint8_t *>(const_cast<char *>(vid_buff)), 0,
                                          (CUdeviceptr) encoderInputFrame->inputPtr,
                                          (int) encoderInputFrame->pitch,
                                          ptrVid->basePtrCudaEnc->GetEncodeWidth(),
@@ -200,11 +207,11 @@ int hvid_record_write_vid(void *inst_id, const char *vid_buff, int vid_buff_size
     }
     ptrVid->baseFrameCnt += (int) ptrVid->baseVPacketCache.size();
     for (std::vector<uint8_t> &packet: ptrVid->baseVPacketCache) {
-        // For each encoded packet
         ptrVid->baseVidWriter.Write(reinterpret_cast<char *>(packet.data()), packet.size());
     }
     if ((bool) is_final) {
         ptrVid->baseVidWriter.Close();
+        LOG_INFO("    frames:{} -> {}", ptrVid->baseFrameCnt, (intptr_t) inst_id);
     }
     return 0;
 }
@@ -218,6 +225,7 @@ int hvid_record_close(void *inst_id) {
         return -1;
     }
     auto ptrVid = (VidInfo *) inst_id;
+    LOG_INFO("<<< close:{} -> {}", ptrVid->baseFrameCnt, (intptr_t) inst_id);
     delete ptrVid;
     return 0;
 }

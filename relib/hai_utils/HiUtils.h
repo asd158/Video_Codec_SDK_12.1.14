@@ -29,6 +29,7 @@ namespace HiFile {
     public:
         bool Open(const std::string &filePath);
         void Close();
+        bool IsOpened();
         ~FileWriter();
         int Write(const void *buffer, size_t sizeToWrite);
     private:
