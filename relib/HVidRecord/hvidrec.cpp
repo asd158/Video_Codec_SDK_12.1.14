@@ -8,6 +8,7 @@
 #include "Logger.h"
 #include <algorithm>
 #include <HiUtils.h>
+#include <set>
 
 simplelogger::Logger *logger = simplelogger::LoggerFactory::CreateConsoleLogger();
 
@@ -126,6 +127,8 @@ void InitializeEncoder(Vid &&vid) {
     vid->basePtrCudaEnc->CreateEncoder(&initializeParams);
 }
 
+static std::set<void *> gRecOpened{};
+
 void *hvid_record_open(int work_gpu, int v_width, int v_height, int framerate, int level, const char *export_dir) {
     ck(cuInit(0));
     int nGpu = 0;
@@ -144,6 +147,7 @@ void *hvid_record_open(int work_gpu, int v_width, int v_height, int framerate, i
         if (ret == nullptr) {
             return nullptr;
         }
+        gRecOpened.emplace(ret);
         LOG_INFO(">>>[{}@{}]{:x}->{}", level, szDeviceName, (intptr_t) ret, ret->baseUuid.c_str());
         return ret;
     }
@@ -152,6 +156,7 @@ void *hvid_record_open(int work_gpu, int v_width, int v_height, int framerate, i
         if (ret == nullptr) {
             return nullptr;
         }
+        gRecOpened.emplace(ret);
         LOG_INFO(">>>[{}@{}]{:x}->{}", level, szDeviceName, (intptr_t) ret, ret->baseUuid.c_str());
         return ret;
     }
@@ -159,6 +164,7 @@ void *hvid_record_open(int work_gpu, int v_width, int v_height, int framerate, i
     if (ret == nullptr) {
         return nullptr;
     }
+    gRecOpened.emplace(ret);
     LOG_INFO(">>>[{}@{}]{:x}->{}", level, szDeviceName, (intptr_t) ret, ret->baseUuid.c_str());
     return ret;
 }
@@ -167,6 +173,9 @@ int hvid_record_get_vid_frame_buffsize(void *inst_id) {
     if (inst_id == nullptr) {
         return -1;
     }
+    if (gRecOpened.count(inst_id) == 0) {
+        return -2;
+    }
     auto ptrVid = (VidInfo *) inst_id;
     return ptrVid->basePtrCudaEnc->GetFrameSize();
 }
@@ -174,6 +183,9 @@ int hvid_record_get_vid_frame_buffsize(void *inst_id) {
 int hvid_record_get_vid_frame_count(void *inst_id) {
     if (inst_id == nullptr) {
         return -1;
+    }
+    if (gRecOpened.count(inst_id) == 0) {
+        return -2;
     }
     auto ptrVid = (VidInfo *) inst_id;
     return ptrVid->baseFrameCnt;
@@ -184,9 +196,12 @@ int hvid_record_write_vid(void *inst_id, const char *vid_buff, int vid_buff_size
     if (inst_id == nullptr) {
         return -1;
     }
+    if (gRecOpened.count(inst_id) == 0) {
+        return -2;
+    }
     auto ptrVid = (VidInfo *) inst_id;
     if (!ptrVid->baseVidWriter.IsOpened()) {
-        return -2;
+        return -3;
     }
     int nFrameSize = ptrVid->basePtrCudaEnc->GetFrameSize();
     if (!(bool) is_final && vid_buff_size == nFrameSize) {
@@ -223,8 +238,12 @@ int hvid_record_close(void *inst_id) {
     if (inst_id == nullptr) {
         return -1;
     }
+    if (gRecOpened.count(inst_id) == 0) {
+        return -2;
+    }
     auto ptrVid = (VidInfo *) inst_id;
     LOG_INFO("<<<{} -> {:x}", ptrVid->baseFrameCnt, (intptr_t) inst_id);
     delete ptrVid;
+    gRecOpened.erase(inst_id);
     return 0;
 }

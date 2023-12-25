@@ -3,6 +3,7 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <iostream>
 
 int main() {
     char szInFilePath[256] = "../../../test/aa.yuv";
@@ -30,5 +31,6 @@ int main() {
             break;
         }
     }
+    std::cout << hvid_record_get_vid_frame_count(inptr) << std::endl;
     hvid_record_close(inptr);
 }
