@@ -144,7 +144,7 @@ void *hvid_record_open(int work_gpu, int v_width, int v_height, int framerate, i
         if (ret == nullptr) {
             return nullptr;
         }
-        LOG_INFO(">>> open[{}@{}] -> {}", level, szDeviceName, (intptr_t) ret);
+        LOG_INFO(">>>[{}@{}]{:x}->{}", level, szDeviceName, (intptr_t) ret, ret->baseUuid.c_str());
         return ret;
     }
     if (level == 2) {
@@ -152,14 +152,14 @@ void *hvid_record_open(int work_gpu, int v_width, int v_height, int framerate, i
         if (ret == nullptr) {
             return nullptr;
         }
-        LOG_INFO(">>> open[{}@{}] -> {}", level, szDeviceName, (intptr_t) ret);
+        LOG_INFO(">>>[{}@{}]{:x}->{}", level, szDeviceName, (intptr_t) ret, ret->baseUuid.c_str());
         return ret;
     }
     auto ret = LevelVidInfo<0>::CreateVid(cuContext, v_width, v_height, framerate, export_dir);
     if (ret == nullptr) {
         return nullptr;
     }
-    LOG_INFO(">>> open[{}@{}] -> {}", level, szDeviceName, (intptr_t) ret);
+    LOG_INFO(">>>[{}@{}]{:x}->{}", level, szDeviceName, (intptr_t) ret, ret->baseUuid.c_str());
     return ret;
 }
 
@@ -211,7 +211,6 @@ int hvid_record_write_vid(void *inst_id, const char *vid_buff, int vid_buff_size
     }
     if ((bool) is_final) {
         ptrVid->baseVidWriter.Close();
-        LOG_INFO("    frames:{} -> {}", ptrVid->baseFrameCnt, (intptr_t) inst_id);
     }
     return 0;
 }
@@ -225,7 +224,7 @@ int hvid_record_close(void *inst_id) {
         return -1;
     }
     auto ptrVid = (VidInfo *) inst_id;
-    LOG_INFO("<<< close:{} -> {}", ptrVid->baseFrameCnt, (intptr_t) inst_id);
+    LOG_INFO("<<<{} -> {:x}", ptrVid->baseFrameCnt, (intptr_t) inst_id);
     delete ptrVid;
     return 0;
 }
