@@ -72,7 +72,7 @@ struct LevelVidInfo : public VidInfo {
     static VidInfo *CreateVid(CUcontext cuc, int v_width, int v_height, int framerate, const std::string &export_dir) {
         try {
             auto vidInfo = new LevelVidInfo<level>();
-            vidInfo->baseBuffFormat = NV_ENC_BUFFER_FORMAT_IYUV;
+            vidInfo->baseBuffFormat = NV_ENC_BUFFER_FORMAT_ABGR;
             vidInfo->baseWidth = v_width;
             vidInfo->baseHeight = v_height;
             vidInfo->baseSampleRate = framerate;
