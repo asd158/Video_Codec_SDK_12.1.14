@@ -14,9 +14,9 @@ simplelogger::Logger *logger = simplelogger::LoggerFactory::CreateConsoleLogger(
 
 struct HighVidPreset {
     GUID Enc = NV_ENC_CODEC_HEVC_GUID;
-    GUID vPreset = NV_ENC_PRESET_P2_GUID;
-    NV_ENC_TUNING_INFO vTuningInfo = NV_ENC_TUNING_INFO_LOSSLESS;
-    NV_ENC_PARAMS_RC_MODE rateControlMode = NV_ENC_PARAMS_RC_CONSTQP;
+    GUID vPreset = NV_ENC_PRESET_P7_GUID;
+    NV_ENC_TUNING_INFO vTuningInfo = NV_ENC_TUNING_INFO_HIGH_QUALITY;
+    NV_ENC_PARAMS_RC_MODE rateControlMode = NV_ENC_PARAMS_RC_VBR;
     GUID profileGUID = NV_ENC_HEVC_PROFILE_MAIN_GUID;
 };
 struct MidVidPreset {

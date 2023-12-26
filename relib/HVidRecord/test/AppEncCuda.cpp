@@ -6,7 +6,7 @@
 #include <iostream>
 
 int main() {
-    char szInFilePath[256] = "../../../test/aa.yuv";
+    char szInFilePath[256] = "../../../test/1366x768.argb32";
 
     // Open input file
     std::ifstream fpIn(szInFilePath, std::ifstream::in | std::ifstream::binary);
@@ -15,7 +15,7 @@ int main() {
         err << "Unable to open input file: " << szInFilePath << std::endl;
         throw std::invalid_argument(err.str());
     }
-    auto inptr = hvid_record_open(0, 1280, 720, 50, 0, "./out");
+    auto inptr = hvid_record_open(0, 1366, 768, 30, 0, "./out");
     auto frameSize = hvid_record_get_vid_frame_buffsize(inptr);
     std::vector<char> frame;
     frame.resize(frameSize);
